@@ -1,0 +1,6 @@
+.local/
+.sites-runtime/
+.wrangler/
+*.zip
+*.tar.gz
+node_modules/

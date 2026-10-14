@@ -1,0 +1,14 @@
+{
+  "name": "ludo-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node test.mjs && node review-tests.mjs && node server-review.mjs && node server-motion-review.mjs && node transport-review.mjs && node animation-review.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && node scripts/dev.mjs"
+  }
+}
