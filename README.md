@@ -4,6 +4,12 @@ Original responsive Ludo for 2–4 people, locally on one screen or online in in
 
 Play online: https://ludo-studio-sentinel.tabisharaza.chatgpt.site
 
+## Arena edition (Build 05)
+
+A compact violet game arena replaces the editorial page: saturated red/green/yellow/blue board, corner player pods, integrated dice/action dock, reduced-motion setting, and large legal-piece shortcuts. Mobile safe-area and landscape layouts are implemented. The custom rules and authoritative multiplayer are unchanged.
+
+On 19 October 2026, actual cloud Chromium inspection verified the desktop arena, 3D rolling overlay, online two-client room creation/join, turn synchronization, and same-tab reconnect. A below-fold action dock was found and corrected in deployment version 6. Mobile emulation was blocked by browser organization policy; mobile/tablet rendering, full-game browser play, and real-device touch/accessibility testing remain outstanding.
+
 ## Development
 
 Node.js 24 or newer. No dependencies to install.
@@ -38,9 +44,12 @@ Rooms are inaccessible after expiry. Expired records are removed on new room cre
 - 5 server-side checkpoint and bounded-event replay checks
 - 6 independent frontend transport race checks
 - 23 deterministic frame-clock dice/token animation and asynchronous interaction checks
+- 13 arena motion-preference, polling and keyboard-focus regression checks
 - JavaScript syntax and bundled Worker module checks
 
-On 14 October 2026, the deployed Build 04 was inspected in actual cloud Chromium at approximately 1165px viewport width. Two naturally rolled consecutive sixes displayed the 3D rolling overlay and matching settled faces. A yard release and six-square path move were observed at intermediate and final positions, with controls locked during playback. This is a scoped desktop check; mobile/tablet devices, full-game browser play, capture/rollback browser playback and assistive-technology checks remain unverified.
+85 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
+
+Earlier local-browser setup was blocked. The later scoped Chromium results and remaining device limits are documented above.
 
 ## Future mobile apps
 
@@ -48,14 +57,14 @@ A web app manifest and scalable icon are included. This is a responsive web game
 
 ## Visual direction and animation
 
-The redesigned interface uses a midnight-green tabletop, raised ivory/enamel board, original SVG pawns, player seats around the board, a mobile-first move picker, and a six-face CSS 3D die. The die lifts and tumbles while awaiting the server, then settles to the authoritative lastRoll. Repeated identical results animate separately; reduced-motion preference removes tumble/bounce.
+Build 04 used a midnight-green tabletop, raised ivory/enamel board, original SVG pawns, player seats around the board, a mobile-first move picker, and a six-face CSS 3D die. The die lifts and tumbles while awaiting the server, then settles to the authoritative lastRoll. Repeated identical results animate separately; reduced-motion preference removes tumble/bounce.
 
 Design research used public examples as references only; no third-party game assets or paid component code are included:
 - Ludo King UI references: https://flomob.com/discover-games/ludo-king-40
 - Dice motion reference: https://www.framer.com/marketplace/components/dice-rolling/
 - CSS 3D guidance: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/transform-style
 
-The original SVG board and pawns were initially inspected with Inkscape. The subsequent live Chromium desktop inspection is described under Verification.
+The actual SVG board and pawns were rendered with Inkscape for component-level visual inspection. Later desktop layout and animation observations are described in the Arena edition section.
 
 ## Motion edition (build 04)
 
