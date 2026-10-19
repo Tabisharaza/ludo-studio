@@ -187,8 +187,8 @@ await test('move cards expose illegal reasons while keeping legal choices action
 });
 await test('focus and pointer preview draw the legal route without changing the game',async()=>{
   const initial=createGame();initial.tokens[0][0]=3;initial.dice=6;const f=fixture({initial}),before=f.get('JSON.stringify(state)');
-  await f.$('piece-actions').children[0].dispatch('focus');assert.equal(f.get('previewLayer.children.length'),6);assert.equal(f.get('previewLayer.children[5].textContent'),'1');assert.equal(f.$('move-detail').hidden,false);assert.equal(f.get('JSON.stringify(state)'),before);
-  await f.$('piece-actions').children[0].dispatch('blur');assert.equal(f.get('previewLayer.children.length'),0);assert.equal(f.$('move-detail').hidden,true);
+  await f.$('piece-actions').children[0].dispatch('focus');assert.equal(f.get('previewLayer.children.length'),6);assert.equal(f.get('previewLayer.children[5].textContent'),'1');assert.equal(f.$('move-detail').hidden,false);assert.equal(f.$('turn-cue').hidden,true);assert.equal(f.get('JSON.stringify(state)'),before);
+  await f.$('piece-actions').children[0].dispatch('blur');assert.equal(f.get('previewLayer.children.length'),0);assert.equal(f.$('move-detail').hidden,true);assert.equal(f.$('turn-cue').hidden,false);
 });
 await test('preview disappears during playback and never exposes opponent choices',()=>{
   const f=fixture();f.get('previewMove(0)');assert.equal(f.get('previewLayer.children.length'),1);f.get('busy=true;render();previewMove(0)');assert.equal(f.get('previewLayer.children.length'),0);
@@ -217,5 +217,7 @@ await test('paste-and-join sends only the parsed room code',async()=>{
   const f=fixture();f.$('room-code').value='https://example.test/#room=abcdef0123456789';f.$('count').value='2';f.setResponse({...f.response(),code:'ABCDEF0123456789'});await f.$('join').dispatch('click');
   assert.equal(f.requests[0].path,'/api/join/ABCDEF0123456789');assert.equal(f.get('online.code'),'ABCDEF0123456789');
 });
+
+await test('ordinary in-flight actions do not show the recovery button',()=>{const f=fixture();f.online();f.get('busy=true;pendingAction={kind:"roll"};render()');assert.equal(f.$('retry').hidden,true);assert.equal(f.$('turn-cue').dataset.kind,'busy');f.get('busy=false;render()');assert.equal(f.$('retry').hidden,false);assert.equal(f.$('turn-cue').dataset.kind,'offline');});
 
 console.log(`${passed} arena motion-preference, polling and keyboard-focus checks passed. Real-device layout remains unverified.`);

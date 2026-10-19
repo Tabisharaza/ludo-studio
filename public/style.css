@@ -45,3 +45,9 @@ header{padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,e
 @media(max-width:370px){header{padding-left:9px;padding-right:9px}.brand{font-size:15px}.turn-head h2{font-size:17px}.player-name{font-size:10px}.player-name small{font-size:7px}#motion-setting{max-width:84px}}
 @media(max-height:530px) and (min-width:620px){.turn-cue{grid-row:4}.piece-actions{grid-row:5;grid-template-columns:repeat(2,minmax(0,1fr))}.move-detail{grid-row:6}.piece-actions button{min-height:46px}.board-wrap{width:min(100%,calc(100svh - 195px))}}
 @media(prefers-reduced-motion:reduce){.preview-destination{animation:none}.piece-actions button{transition:none}}
+/* Preview detail replaces the cue so keyboard focus does not push controls away. */
+.move-detail{grid-row:3;padding:8px 10px;border-radius:9px;background:#16112880;border-left:2px solid var(--active)}
+.roll-button:disabled{background:#3a304f;color:#d6c9e9;box-shadow:0 2px 0 #1a142a}
+.join-section input{background:#1d1732;border-color:#776394;color:#fff}.join-section .secondary{background:#514064;border:1px solid #8b74b1;color:#fff}
+@media(min-width:621px) and (min-height:531px){.board-wrap{width:min(570px,calc(100svh - 440px))}}
+@media(max-height:530px) and (min-width:620px){.move-detail{grid-row:4}}

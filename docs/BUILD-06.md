@@ -24,6 +24,6 @@ These are widely used reference products, not a verified global ranking. No game
 
 ## Verification
 
-115 automated checks: 85 previous checks, 9 additional production-app UI/transport regressions, and 21 pure presentation/invite tests. The seeded guidance check compares legality, destinations and captures with the unchanged engine over 7,500 iterations across 2/3/4-player games. Existing tests also simulate 500 complete games and cover authoritative room races, capture checkpoints, rollback, motion and keyboard focus.
+116 automated checks: 85 previous checks, 10 additional production-app UI/transport regressions, and 21 pure presentation/invite tests. The seeded guidance check compares legality, destinations and captures with the unchanged engine over 7,500 iterations across 2/3/4-player games. Existing tests also simulate 500 complete games and cover authoritative room races, capture checkpoints, rollback, motion and keyboard focus.
 
 Automated DOM fixtures do not prove actual CSS rendering. Browser observations for this release are recorded in README when completed. Mobile emulation was previously denied by browser organization policy and is not retried; no mobile or real-device QA is claimed.
