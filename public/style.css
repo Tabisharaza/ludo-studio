@@ -21,3 +21,27 @@ header{padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,e
 @media(max-height:530px) and (min-width:620px){.online-bar{position:static;width:auto;max-width:850px;min-height:30px;justify-content:flex-end;margin-bottom:6px}.online-bar div{flex-wrap:wrap;justify-content:flex-end;flex-shrink:1}.board-wrap{width:min(100%,calc(100svh - 195px));min-width:190px}.player{min-width:0}}
 /* Browser-verified desktop: retain the complete action dock below the board. */
 @media(min-width:621px) and (min-height:531px){header{height:52px;padding-top:6px;padding-bottom:6px}.online-bar{min-height:30px;margin-bottom:6px}.board-wrap{width:min(570px,calc(100svh - 365px));padding:45px 0 47px}.player{height:37px;padding:3px 8px;gap:7px}.player-avatar{width:28px;height:28px}.player-avatar svg{width:22px;height:27px}.player-name small{font-size:7px;margin-top:2px}.player-name{font-size:11px}.game-layout{gap:8px}}
+
+/* Build 06: clear choices, visible table state, and original route previews. */
+.turn-cue{grid-column:1/-1;grid-row:3;margin:8px 0 0;padding:8px 10px;border-radius:9px;background:#16112880;color:#e5dcf8;font-size:11px;line-height:1.45;border-left:2px solid var(--active)}
+.turn-cue[data-kind="offline"]{border-color:#ffca69;color:#ffdc9b;background:#4c352f80}
+.turn-cue[data-kind="waiting"]{border-color:#9b8ab8;color:#d1c7e3}
+.piece-actions{grid-row:4;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.piece-actions button{padding:8px 5px;justify-content:flex-start;min-height:56px;text-align:left;transition:background .16s,transform .16s}
+.piece-actions button:hover:not(:disabled),.piece-actions button:focus-visible{background:#6e5688;transform:translateY(-2px)}
+.piece-actions button:disabled{opacity:.65;background:#2d2540;border-color:#76658460}
+.move-copy{display:flex;min-width:0;flex-direction:column;gap:3px}.move-copy strong{font-size:11px}.move-copy small{font-size:9px;line-height:1.3;color:#e5d8f5}
+.piece-actions button[data-kind="capture"]{border-color:#ffbd74;background:#684148}.piece-actions button[data-kind="home"]{border-color:#ffe680;background:#5a4b37}
+.move-detail{grid-column:1/-1;grid-row:5;margin:8px 0 0;color:#eee3ff;font-size:11px;line-height:1.45}
+.move-preview{position:absolute;inset:0;pointer-events:none;z-index:6;border-radius:13px}
+.preview-step{position:absolute;width:2%;height:2%;transform:translate(-50%,-50%);border-radius:50%;background:var(--active);box-shadow:0 0 0 1px #fff;opacity:.9}
+.preview-destination{width:6%;height:6%;display:grid;place-items:center;background:#251b3be8;color:#fff;border:2px solid var(--active);box-shadow:0 0 0 2px #fff9,0 0 12px var(--active);font-size:clamp(9px,1.2vw,14px);font-weight:bold;animation:destination-in .18s ease-out}
+@keyframes destination-in{from{transform:translate(-50%,-50%) scale(.6);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.player-name em{display:inline-block;background:#ffffff20;border-radius:4px;font-style:normal;font-size:7px;padding:2px 4px;margin-left:2px;vertical-align:middle}.player.seat-empty{opacity:.6;border-style:dashed}.player.your-seat .player-avatar{box-shadow:0 0 0 2px #fff7}.player-name{min-width:0}
+#connection{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.2px}#connection:before{content:'';flex:0 0 6px;width:6px;height:6px;border-radius:50%;background:#b6a8d1}#connection[data-state="online"]:before{background:#56e8a7;box-shadow:0 0 8px #56e8a750}#connection[data-state="offline"]:before{background:#ffca69}
+.online-bar{flex-wrap:wrap;row-gap:4px}.online-bar div{margin-left:auto;flex-wrap:wrap}.online-bar button,.quiet,.new-game,#motion-setting{min-height:40px}
+@media(min-width:621px) and (min-height:531px){.board-wrap{width:min(570px,calc(100svh - 415px))}}
+@media(max-width:620px){.piece-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.piece-actions button{min-height:48px;padding:5px 9px}.move-copy strong{font-size:12px}.move-copy small{font-size:11px}.turn-cue,.move-detail{font-size:11px}.online-bar>span{max-width:none;width:100%}#connection{font-size:10px}.online-bar{margin-bottom:9px}.online-bar div{width:100%;justify-content:flex-end}.online-bar button{min-height:40px;font-size:11px}.board-wrap{width:min(100%,max(230px,calc(100svh - 455px - env(safe-area-inset-top) - env(safe-area-inset-bottom))))}.player-name small{font-size:8px}.player-name em{font-size:7px}.quiet{font-size:11px}.new-game{font-size:11px}#motion-setting{font-size:9px;max-width:90px}.header-right{gap:5px}.mini-pawn{width:22px;height:28px}#status{font-size:11px}.turn-head h2{font-size:19px}}
+@media(max-width:370px){header{padding-left:9px;padding-right:9px}.brand{font-size:15px}.turn-head h2{font-size:17px}.player-name{font-size:10px}.player-name small{font-size:7px}#motion-setting{max-width:84px}}
+@media(max-height:530px) and (min-width:620px){.turn-cue{grid-row:4}.piece-actions{grid-row:5;grid-template-columns:repeat(2,minmax(0,1fr))}.move-detail{grid-row:6}.piece-actions button{min-height:46px}.board-wrap{width:min(100%,calc(100svh - 195px))}}
+@media(prefers-reduced-motion:reduce){.preview-destination{animation:none}.piece-actions button{transition:none}}

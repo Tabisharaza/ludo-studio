@@ -1,3 +1,4 @@
+import {moveOptions,turnCue,parseInvite} from './public/guidance.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
@@ -50,7 +51,7 @@ function fixture({preference='auto',osReduced=false,initial=roll(createGame(),6)
   const localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value)),removeItem:key=>storage.delete(key)};
   const sessionStorage={getItem:key=>session.get(key)??null,setItem:(key,value)=>session.set(key,String(value)),removeItem:key=>session.delete(key)};
   let timerId=0,diceOptions,diceCancels=0,nextResponse=null;
-  const context=vm.createContext({
+  const context=vm.createContext({moveOptions,turnCue,parseInvite,
     document,localStorage,sessionStorage,structuredClone,crypto:webcrypto,AbortController,console,
     createGame,current,legalMoves,roll,move,coordinate,PATH,LANES,START,SAFE,tokenChanges,replayEvents,
     colors:['red','green','gold','blue'],boardSVG:()=>'<svg/>',pawnSVG:()=>'<svg/>',
@@ -178,6 +179,43 @@ await test('an online action completion does not take focus from an opened dialo
   f.setResponse(f.response({version:5,state:roll(initial,6).state}));
   const pending=f.get('rollDice()');f.$('rules-dialog').showModal();f.$('rules-close').focus();await pending;
   assert.equal(f.document.activeElement,f.$('rules-close'));assert.equal(f.$('rules-dialog').open,true);
+});
+
+await test('move cards expose illegal reasons while keeping legal choices actionable',()=>{
+  const initial=createGame();initial.tokens[0]=[54,-1,12,56];initial.dice=4;const f=fixture({initial});
+  const cards=f.$('piece-actions').children;assert.equal(cards.length,4);assert.equal(cards[0].disabled,true);assert.match(cards[0].getAttribute('aria-label'),/Needs 2 or less/);assert.equal(cards[1].disabled,true);assert.equal(cards[2].disabled,false);assert.equal(cards[3].disabled,true);
+});
+await test('focus and pointer preview draw the legal route without changing the game',async()=>{
+  const initial=createGame();initial.tokens[0][0]=3;initial.dice=6;const f=fixture({initial}),before=f.get('JSON.stringify(state)');
+  await f.$('piece-actions').children[0].dispatch('focus');assert.equal(f.get('previewLayer.children.length'),6);assert.equal(f.get('previewLayer.children[5].textContent'),'1');assert.equal(f.$('move-detail').hidden,false);assert.equal(f.get('JSON.stringify(state)'),before);
+  await f.$('piece-actions').children[0].dispatch('blur');assert.equal(f.get('previewLayer.children.length'),0);assert.equal(f.$('move-detail').hidden,true);
+});
+await test('preview disappears during playback and never exposes opponent choices',()=>{
+  const f=fixture();f.get('previewMove(0)');assert.equal(f.get('previewLayer.children.length'),1);f.get('busy=true;render();previewMove(0)');assert.equal(f.get('previewLayer.children.length'),0);
+  f.get('busy=false');f.online();f.get('online.seat=1;render();previewMove(0)');assert.equal(f.get('previewLayer.children.length'),0);
+});
+await test('hovering an opposing pawn cannot preview a current-player pawn with the same index',async()=>{
+  const f=fixture();await f.get('tokens[2][0]').dispatch('pointerenter');assert.equal(f.get('previewLayer.children.length'),0);
+});
+await test('online keyboard focus skips disabled piece cards after roll',async()=>{
+  const initial=createGame();initial.tokens[0]=[55,10,-1,56];const f=fixture({initial});f.online();f.$('roll').focus();
+  f.setResponse(f.response({version:5,state:roll(initial,2).state}));await f.get('rollDice()');assert.equal(f.document.activeElement.dataset.move,'1');assert.equal(f.document.activeElement.disabled,false);
+});
+await test('disconnected keyboard entry cannot send a fresh roll or move',async()=>{
+  const f=fixture({initial:createGame()});f.online({disconnected:true});await f.get('rollDice()');assert.equal(f.requests.length,0);
+  const g=fixture();g.online({disconnected:true});await g.get('choose(0)');assert.equal(g.requests.length,0);
+});
+await test('open dialogs block online action entry consistently',async()=>{
+  const f=fixture({initial:createGame()});f.online();f.$('rules-dialog').showModal();await f.get('rollDice()');assert.equal(f.requests.length,0);
+  const g=fixture();g.online();g.$('new-dialog').showModal();await g.get('choose(0)');assert.equal(g.requests.length,0);
+});
+await test('empty online seats and own seat have distinct readable labels',()=>{
+  const f=fixture();f.online();f.get('online.ready=false;online.joined=[true,false];render()');
+  assert.match(f.$('players').children[0].innerHTML,/YOU/);assert.match(f.$('players').children[1].innerHTML,/WAITING FOR FRIEND/);assert.match(f.$('players').children[1].className,/seat-empty/);assert.equal(f.$('turn-name').textContent,'Waiting for friends');
+});
+await test('paste-and-join sends only the parsed room code',async()=>{
+  const f=fixture();f.$('room-code').value='https://example.test/#room=abcdef0123456789';f.$('count').value='2';f.setResponse({...f.response(),code:'ABCDEF0123456789'});await f.$('join').dispatch('click');
+  assert.equal(f.requests[0].path,'/api/join/ABCDEF0123456789');assert.equal(f.get('online.code'),'ABCDEF0123456789');
 });
 
 console.log(`${passed} arena motion-preference, polling and keyboard-focus checks passed. Real-device layout remains unverified.`);

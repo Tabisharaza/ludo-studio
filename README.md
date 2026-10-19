@@ -4,6 +4,12 @@ Original responsive Ludo for 2–4 people, locally on one screen or online in in
 
 Play online: https://ludo-studio-sentinel.tabisharaza.chatgpt.site
 
+## Clear play (Build 06)
+
+Move cards now explain captures, safe squares, exact finishes and blocked pieces. Hover or focus a legal choice to preview its actual route. Visible turn cues, your-seat labels, open-seat indicators and pasted invite links make online tables easier to follow. All custom rules and the authoritative server remain unchanged.
+
+[Implementation and official product references](docs/BUILD-06.md). Build 06 has 115 automated checks, including 7,500 seeded engine/presentation comparisons. Browser verification is pending for this milestone; the earlier Build 05 observations below apply only to Build 05.
+
 ## Arena edition (Build 05)
 
 A compact violet game arena replaces the editorial page: saturated red/green/yellow/blue board, corner player pods, integrated dice/action dock, reduced-motion setting, and large legal-piece shortcuts. Mobile safe-area and landscape layouts are implemented. The custom rules and authoritative multiplayer are unchanged.
@@ -44,10 +50,11 @@ Rooms are inaccessible after expiry. Expired records are removed on new room cre
 - 5 server-side checkpoint and bounded-event replay checks
 - 6 independent frontend transport race checks
 - 23 deterministic frame-clock dice/token animation and asynchronous interaction checks
-- 13 arena motion-preference, polling and keyboard-focus regression checks
+- 22 arena motion-preference, polling, preview, invitation and keyboard-focus regression checks
+- 21 move-guidance, seeded consistency, invitation parsing and turn-cue checks
 - JavaScript syntax and bundled Worker module checks
 
-85 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
+115 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
 
 Earlier local-browser setup was blocked. The later scoped Chromium results and remaining device limits are documented above.
 

@@ -1,3 +1,4 @@
+import {moveOptions,turnCue,parseInvite} from './public/guidance.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
@@ -135,8 +136,8 @@ try {
     const $=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
     const document={createElement:()=>new Element(),documentElement:new Element()};
     let id=0,localDice=0;
-    const context=vm.createContext({initial:structuredClone(state),local,structuredClone,createGame,current,roll,move,legalMoves,coordinate,tokenChanges,replayEvents,diceView:dice.view,tokenMotion:motion.motion,tokens:motion.tokens,$,document,names:['Coral','Mint','Gold','Blue'],colors:['coral','mint','gold','blue'],pawnSVG:()=>'<svg/>',key:'test',localStorage:{setItem(){}},rememberRoom(){},reducedMotion:()=>false,die(){localDice++;return 6;},randomToken:()=>String(++id).padStart(32,'0'),request:(path,data)=>new Promise((resolve,reject)=>requests.push({path,data,resolve,reject}))});
-    vm.runInContext('let state=initial,online=local?null:{code:"ROOM",token:"TOKEN",version:1,ready:true,seat:0,joined:[true,true],disconnected:false},pendingAction=null,busy=false,visualBusy=false,diceContext=local?"local":"ROOM",visualEpoch=0,queuedRoom=null,presentedRoll=state.lastRoll,announcement="";'+renderSource+declarations,context);
+    const context=vm.createContext({moveOptions,turnCue,parseInvite,initial:structuredClone(state),local,structuredClone,createGame,current,roll,move,legalMoves,coordinate,tokenChanges,replayEvents,diceView:dice.view,tokenMotion:motion.motion,tokens:motion.tokens,$,document,names:['Coral','Mint','Gold','Blue'],colors:['coral','mint','gold','blue'],pawnSVG:()=>'<svg/>',key:'test',localStorage:{setItem(){}},rememberRoom(){},reducedMotion:()=>false,die(){localDice++;return 6;},randomToken:()=>String(++id).padStart(32,'0'),request:(path,data)=>new Promise((resolve,reject)=>requests.push({path,data,resolve,reject}))});
+    vm.runInContext('const previewLayer=$("preview-layer");let state=initial,online=local?null:{code:"ROOM",token:"TOKEN",version:1,ready:true,seat:0,joined:[true,true],disconnected:false},pendingAction=null,busy=false,visualBusy=false,diceContext=local?"local":"ROOM",visualEpoch=0,queuedRoom=null,presentedRoll=state.lastRoll,announcement="";'+renderSource+declarations,context);
     const get=expression=>vm.runInContext(expression,context);get('render()');
     const apply=value=>{context.incoming=value;return get('applyRoom(incoming)');};
     const response=(next,events,version)=>({ok:true,status:200,value:{code:'ROOM',version,state:next,events,event:'Authoritative server result',ready:true,seat:0,joined:[true,true]}});
