@@ -8,7 +8,7 @@ Play online: https://ludo-studio-sentinel.tabisharaza.chatgpt.site
 
 Move cards now explain captures, safe squares, exact finishes and blocked pieces. Hover or focus a legal choice to preview its actual route. Visible turn cues, your-seat labels, open-seat indicators and pasted invite links make online tables easier to follow. All custom rules and the authoritative server remain unchanged.
 
-[Implementation and official product references](docs/BUILD-06.md). Build 06 has 116 automated checks, including 7,500 seeded engine/presentation comparisons. Browser verification is pending for this milestone; the earlier Build 05 observations below apply only to Build 05.
+[Implementation and official product references](docs/BUILD-06.md). Build 06 has 116 automated checks, including 7,500 seeded engine/presentation comparisons. Live cloud Chromium verified Build 06 table creation, allowed-origin invite joining and foreign-link rejection, two-client turn/move synchronization, same-tab seat recovery, keyboard destination/path previews, disabled-choice reasons and the corrected full action dock at 1188 × 761. Mobile/tablet rendering and complete-game real-device testing remain unverified. The Build 05 observations below are historical.
 
 ## Arena edition (Build 05)
 
