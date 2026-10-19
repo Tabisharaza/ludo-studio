@@ -1,3 +1,4 @@
+import {terminalRoomFailure} from './public/connection.mjs';
 import {moveOptions,turnCue,parseInvite} from './public/guidance.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -127,7 +128,7 @@ try {
   });
 
   const source=readFileSync('public/app.mjs','utf8');
-  const declarations=['cancelVisuals','rollDice','choose','sameRoom','consumeRoom','queueRoom','drainRoom','applyRoom','sendAction'].map(name=>{
+  const declarations=['endRoom','cancelVisuals','rollDice','choose','sameRoom','consumeRoom','queueRoom','drainRoom','applyRoom','sendAction'].map(name=>{
     const line=source.split('\n').find(l=>l.startsWith(`function ${name}(`)||l.startsWith(`async function ${name}(`));assert.ok(line,`Missing ${name}`);return line;
   }).join('\n');
   const renderSource=source.slice(source.indexOf('function render(){'),source.indexOf('function die(){'));
@@ -136,8 +137,8 @@ try {
     const $=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
     const document={createElement:()=>new Element(),documentElement:new Element()};
     let id=0,localDice=0;
-    const context=vm.createContext({moveOptions,turnCue,parseInvite,initial:structuredClone(state),local,structuredClone,createGame,current,roll,move,legalMoves,coordinate,tokenChanges,replayEvents,diceView:dice.view,tokenMotion:motion.motion,tokens:motion.tokens,$,document,names:['Coral','Mint','Gold','Blue'],colors:['coral','mint','gold','blue'],pawnSVG:()=>'<svg/>',key:'test',localStorage:{setItem(){}},rememberRoom(){},reducedMotion:()=>false,die(){localDice++;return 6;},randomToken:()=>String(++id).padStart(32,'0'),request:(path,data)=>new Promise((resolve,reject)=>requests.push({path,data,resolve,reject}))});
-    vm.runInContext('const previewLayer=$("preview-layer");let state=initial,online=local?null:{code:"ROOM",token:"TOKEN",version:1,ready:true,seat:0,joined:[true,true],disconnected:false},pendingAction=null,busy=false,visualBusy=false,diceContext=local?"local":"ROOM",visualEpoch=0,queuedRoom=null,presentedRoll=state.lastRoll,announcement="";'+renderSource+declarations,context);
+    const context=vm.createContext({moveOptions,turnCue,parseInvite,terminalRoomFailure,clearTimeout(){},sessionStorage:{removeItem(){}},history:{replaceState(){}},location:{pathname:'/'},initial:structuredClone(state),local,structuredClone,createGame,current,roll,move,legalMoves,coordinate,tokenChanges,replayEvents,diceView:dice.view,tokenMotion:motion.motion,tokens:motion.tokens,$,document,names:['Coral','Mint','Gold','Blue'],colors:['coral','mint','gold','blue'],pawnSVG:()=>'<svg/>',key:'test',localStorage:{setItem(){}},rememberRoom(){},reducedMotion:()=>false,die(){localDice++;return 6;},randomToken:()=>String(++id).padStart(32,'0'),request:(path,data)=>new Promise((resolve,reject)=>requests.push({path,data,resolve,reject}))});
+    vm.runInContext('const previewLayer=$("preview-layer");let state=initial,online=local?null:{code:"ROOM",token:"TOKEN",version:1,ready:true,seat:0,joined:[true,true],disconnected:false},pendingAction=null,pollTimer=null,busy=false,visualBusy=false,diceContext=local?"local":"ROOM",visualEpoch=0,queuedRoom=null,presentedRoll=state.lastRoll,announcement="";'+renderSource+declarations,context);
     const get=expression=>vm.runInContext(expression,context);get('render()');
     const apply=value=>{context.incoming=value;return get('applyRoom(incoming)');};
     const response=(next,events,version)=>({ok:true,status:200,value:{code:'ROOM',version,state:next,events,event:'Authoritative server result',ready:true,seat:0,joined:[true,true]}});
@@ -164,6 +165,11 @@ try {
   });
   await test('online request never uses local die and repeated clicks cannot create another action',async()=>{
     const f=appFixture(),before=createGame(),after=roll(before,6).state,ev=event(before,after,2,'roll');const pending=f.get('rollDice()');await f.get('rollDice()');assert.equal(f.requests.length,1);assert.equal(f.localDice,0);f.requests[0].resolve(f.response(after,[ev],2));await microtasks();await f.clock.advance(700);assert.equal(f.get('busy'),true);await f.get('choose(0)');assert.equal(f.requests.length,1);await f.clock.finish(pending);assert.equal(f.get('state.dice'),6);
+  });
+  await test('terminal action failure cancels the real dice stage and leaves recovery unlocked',async()=>{
+    const f=appFixture(),pending=f.get('rollDice()');await f.clock.advance(200);assert.equal(f.dice.stage.hidden,false);
+    f.requests[0].resolve({ok:false,status:404,value:{errorCode:'room_unavailable'}});await microtasks();await f.clock.finish(pending);
+    assert.equal(f.dice.stage.hidden,true);assert.equal(f.get('busy'),false);assert.equal(f.get('online.terminal'),'room');assert.equal(f.get('pendingAction'),null);assert.equal(f.$('roll').disabled,true);assert.equal(f.$('retry').hidden,true);
   });
   await test('lost response retries identical action ID without duplicating authoritative roll',async()=>{
     const f=appFixture(),before=createGame(),after=roll(before,6).state,ev=event(before,after,2,'roll');const first=f.get('sendAction("roll")');f.requests[0].reject(Error('offline'));await first;assert.equal(f.get('online.disconnected'),true);

@@ -26,6 +26,7 @@ export function moveOptions(state){
 
 export function turnCue(state,online,{busy=false,pending=false}={}){
   const names=['Coral','Mint','Gold','Blue'],player=current(state),name=names[player];
+  if(online?.terminal)return {kind:'terminal',title:online.terminal==='room'?'Table unavailable':'Seat unavailable',hint:online.terminal==='room'?'Create a new table or join a different invite.':'Use your original tab, or create or join another table.'};
   if(online?.disconnected||pending&&!busy)return {kind:'offline',title:'Connection paused',hint:pending?'Retry safely checks your last action.':'Your seat is saved in this tab. Tap Retry connection.'};
   if(online&&!online.ready){const missing=online.joined.filter(joined=>!joined).length;return {kind:'waiting',title:'Waiting for friends',hint:`${missing} seat${missing===1?'':'s'} left. Copy the invite link to fill your table.`};}
   if(state.winner!==null)return {kind:'won',title:`${names[state.winner]} wins!`,hint:'All four pieces home. Start a new table to play again.'};

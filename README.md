@@ -4,6 +4,12 @@ Original responsive Ludo for 2–4 people, locally on one screen or online in in
 
 Play online: https://ludo-studio-sentinel.tabisharaza.chatgpt.site
 
+## Room recovery patch (Build 06.1)
+
+Expired or missing tables and invalid seat sessions now stop reconnecting and offer an accurate Create / join table path. Only the invalid tab session is removed; the last board remains visible. Temporary network/server failures keep the saved seat and safe same-action retry. Ordinary turn conflicts do not invalidate a seat. Server error metadata is additive; game rules, dice, expiry duration and authoritative validation are unchanged.
+
+[Patch evidence and scope](docs/RECOVERY-06.1.md). All 136 automated checks and the Worker build pass. Terminal recovery is covered with the production app in deterministic DOM/transport fixtures and real in-memory SQLite API tests; this is not a claim of browser or real-device terminal-expiry testing.
+
 ## Clear play (Build 06)
 
 Move cards now explain captures, safe squares, exact finishes and blocked pieces. Hover or focus a legal choice to preview its actual route. Visible turn cues, your-seat labels, open-seat indicators and pasted invite links make online tables easier to follow. All custom rules and the authoritative server remain unchanged.
@@ -46,15 +52,15 @@ Rooms are inaccessible after expiry. Expired records are removed on new room cre
 
 - 11 core tests, including 500 simulated complete games
 - 16 independent custom-rule checks
-- 11 API/security checks using real in-memory SQLite, with separate client sessions, concurrent joins/moves, stale writes, duplicates, reconnects, authorization and expiry
+- 12 API/security checks using real in-memory SQLite, with separate client sessions, concurrent joins/moves, stale writes, duplicates, reconnects, authorization and expiry
 - 5 server-side checkpoint and bounded-event replay checks
 - 6 independent frontend transport race checks
-- 23 deterministic frame-clock dice/token animation and asynchronous interaction checks
-- 23 arena motion-preference, polling, preview, invitation and keyboard-focus regression checks
+- 24 deterministic frame-clock dice/token animation and asynchronous interaction checks
+- 41 arena recovery, motion-preference, polling, preview, invitation and keyboard-focus regression checks
 - 21 move-guidance, seeded consistency, invitation parsing and turn-cue checks
 - JavaScript syntax and bundled Worker module checks
 
-116 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
+136 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
 
 Earlier local-browser setup was blocked. The later scoped Chromium results and remaining device limits are documented above.
 

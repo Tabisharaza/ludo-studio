@@ -1,3 +1,4 @@
+import {terminalRoomFailure} from './public/connection.mjs';
 import {moveOptions,turnCue,parseInvite} from './public/guidance.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -42,25 +43,25 @@ class Element {
   close(){this.open=false;}
 }
 
-function fixture({preference='auto',osReduced=false,initial=roll(createGame(),6).state}={}){
-  const nodes=new Map(),storage=new Map([['ludo-motion',preference],['ludo-studio-v2',JSON.stringify(initial)]]),session=new Map(),timers=new Map(),requests=[];
+function fixture({preference='auto',osReduced=false,initial=roll(createGame(),6).state,savedRoom=null,startupResponse=null}={}){
+  const nodes=new Map(),storage=new Map([['ludo-motion',preference],['ludo-studio-v2',JSON.stringify(initial)]]),session=new Map(savedRoom?[['ludo-room-v1',JSON.stringify(savedRoom)]]:[]),timers=new Map(),requests=[];
   const document={hidden:false,addEventListener(){}};
   document.body=new Element(document,'body');document.documentElement=new Element(document,'html');document.activeElement=document.body;
   document.createElement=tag=>new Element(document,tag);
   document.getElementById=id=>{if(!nodes.has(id)){const node=new Element(document,id==='motion-setting'?'select':/^(roll|dice-tap|.*-open|rules-close|rules-bottom|copy-link|retry|start|join)$/.test(id)?'button':'div');node.id=id;document.body.append(node);nodes.set(id,node);}return nodes.get(id);};
   const localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,String(value)),removeItem:key=>storage.delete(key)};
   const sessionStorage={getItem:key=>session.get(key)??null,setItem:(key,value)=>session.set(key,String(value)),removeItem:key=>session.delete(key)};
-  let timerId=0,diceOptions,diceCancels=0,nextResponse=null;
-  const context=vm.createContext({moveOptions,turnCue,parseInvite,
+  const historyChanges=[];let timerId=0,diceOptions,diceCancels=0,nextResponse=startupResponse?.value??null,nextStatus=startupResponse?.status??200,nextError=startupResponse?.error??null;
+  const context=vm.createContext({moveOptions,turnCue,parseInvite,terminalRoomFailure,
     document,localStorage,sessionStorage,structuredClone,crypto:webcrypto,AbortController,console,
     createGame,current,legalMoves,roll,move,coordinate,PATH,LANES,START,SAFE,tokenChanges,replayEvents,
     colors:['red','green','gold','blue'],boardSVG:()=>'<svg/>',pawnSVG:()=>'<svg/>',
     matchMedia:()=>({matches:osReduced}),
     createDice:(root,options)=>{diceOptions=options;return {active:false,show(value){root.dataset.value=String(value);},cancel(){diceCancels++;},start(){},async settle(){}};},
     createTokenMotion:()=>({active:false,cancel(){},async play(){}}),
-    location:{hash:'',pathname:'/',origin:'https://example.test'},history:{replaceState(){}},navigator:{clipboard:{async writeText(){}}},
+    location:{hash:'',pathname:'/',origin:'https://example.test'},history:{replaceState(...args){historyChanges.push(args[2]);}},navigator:{clipboard:{async writeText(){}}},
     setTimeout:(fn,delay)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
-    fetch:async(path,options)=>{requests.push({path,body:JSON.parse(options.body)});assert.ok(nextResponse,'Unexpected production fetch');return {ok:true,status:200,json:async()=>structuredClone(nextResponse)};}
+    fetch:async(path,options)=>{requests.push({path,body:JSON.parse(options.body)});if(nextError)throw nextError;assert.ok(nextResponse,'Unexpected production fetch');return {ok:nextStatus>=200&&nextStatus<300,status:nextStatus,json:async()=>structuredClone(nextResponse)};}
   });
   const get=code=>vm.runInContext(code,context);
   get(source);
@@ -70,7 +71,7 @@ function fixture({preference='auto',osReduced=false,initial=roll(createGame(),6)
     get('online=roomState;diceContext="ROOM";render()');
   }
   function response({version=4,state=initial,...rest}={}){return {code:'ROOM',version,state:structuredClone(state),ready:true,seat:0,joined:[true,true],event:'Server state',...rest};}
-  return {$,document,storage,requests,timers,get,context,online,response,setResponse:value=>{nextResponse=value;},get diceOptions(){return diceOptions;},get diceCancels(){return diceCancels;}};
+  return {$,document,storage,session,requests,timers,historyChanges,get,context,online,response,setResponse:(value,status=200)=>{nextResponse=value;nextStatus=status;nextError=null;},setFailure:error=>{nextError=error;},get diceOptions(){return diceOptions;},get diceCancels(){return diceCancels;}};
 }
 
 await test('saved motion choices initialize both UI attribute and JS preference',()=>{
@@ -219,5 +220,113 @@ await test('paste-and-join sends only the parsed room code',async()=>{
 });
 
 await test('ordinary in-flight actions do not show the recovery button',()=>{const f=fixture();f.online();f.get('busy=true;pendingAction={kind:"roll"};render()');assert.equal(f.$('retry').hidden,true);assert.equal(f.$('turn-cue').dataset.kind,'busy');f.get('busy=false;render()');assert.equal(f.$('retry').hidden,false);assert.equal(f.$('turn-cue').dataset.kind,'offline');});
+
+
+// Terminal room/session failures are different from a recoverable connection loss.
+const expired={error:'This table has expired or does not exist. Create a new table.',errorCode:'room_unavailable'};
+const missingSeat={error:'Your seat session is missing. Rejoin from your original browser tab.',errorCode:'seat_missing'};
+const savedRoom=()=>({code:'AABBCCDDEEFF0011',token:'a'.repeat(64),version:4,ready:true,seat:0,joined:[true,true],state:createGame(),expires:1});
+async function boot(f){for(let i=0;i<20;i++)await Promise.resolve();return f;}
+const pollScheduled=f=>[...f.timers.values()].some(t=>t.delay===1800||t.delay===2500);
+
+await test('only definitive room and seat errors are terminal',()=>{
+  for(const [status,value,expected] of [[404,expired,'room'],[401,{errorCode:'invalid_session'},'seat'],[403,missingSeat,'seat'],[403,{error:'It is another player’s turn.'},null],[403,{error:'Origin not allowed.'},null],[409,{},null],[429,{},null],[503,{},null]])assert.equal(terminalRoomFailure({ok:false,status,value})?.kind??null,expected);
+  assert.equal(terminalRoomFailure({ok:true,status:200,value:{}}),null);
+});
+await test('expired polling stops, removes only invalid session and offers recovery',async()=>{
+  const f=fixture();f.online();f.get('rememberRoom()');const local=f.storage.get('ludo-studio-v2'),board=f.get('JSON.stringify(state)');
+  f.setResponse(expired,404);await f.get('poll()');
+  assert.equal(f.get('online.terminal'),'room');assert.equal(f.$('turn-name').textContent,'Table unavailable');assert.equal(f.$('retry').hidden,true);assert.equal(f.$('copy-link').hidden,true);assert.equal(f.$('roll').disabled,true);assert.equal(f.$('piece-actions').children.length,0);assert.equal(f.$('online-open').textContent,'Create / join table');assert.equal(f.document.activeElement,f.$('online-open'));
+  assert.equal(pollScheduled(f),false);assert.equal(f.session.has('ludo-room-v1'),false);assert.equal(f.storage.get('ludo-studio-v2'),local);assert.equal(f.get('JSON.stringify(state)'),board);assert.equal(f.historyChanges.at(-1),'/');assert.doesNotMatch(f.$('turn-cue').textContent,/seat is saved|Retry/i);
+  await f.get('poll()');await f.get('rollDice()');assert.equal(f.requests.length,1);
+});
+await test('missing seat polling stops without pretending the table itself expired',async()=>{
+  const f=fixture();f.online();f.setResponse(missingSeat,403);await f.get('poll()');
+  assert.equal(f.get('online.terminal'),'seat');assert.equal(f.$('turn-name').textContent,'Seat unavailable');assert.match(f.$('status').textContent,/original browser tab/);assert.equal(pollScheduled(f),false);
+});
+await test('terminal action response clears pending retry and locks stale controls',async()=>{
+  for(const [status,value] of [[404,expired],[403,missingSeat],[401,{errorCode:'invalid_session'}]]){
+    const f=fixture({initial:createGame()});f.online();f.setResponse(value,status);await f.get('rollDice()');
+    assert.ok(f.get('online.terminal'));assert.equal(f.get('pendingAction'),null);assert.equal(f.get('busy'),false);assert.equal(f.$('roll').disabled,true);assert.equal(f.$('retry').hidden,true);assert.equal(pollScheduled(f),false);
+    await f.get('sendAction("roll")');await f.get('poll()');assert.equal(f.requests.length,1);
+  }
+});
+await test('reload preserves the definitive expired-room result and stops retrying',async()=>{
+  const f=await boot(fixture({savedRoom:savedRoom(),startupResponse:{status:404,value:expired}}));
+  assert.equal(f.get('online.terminal'),'room');assert.equal(f.get('busy'),false);assert.match(f.$('status').textContent,/expired or no longer exists/);assert.doesNotMatch(f.$('status').textContent,/seat is saved|Could not reconnect/);assert.equal(pollScheduled(f),false);assert.equal(f.session.has('ludo-room-v1'),false);
+});
+await test('reload marks an invalid seat as terminal without autojoining another seat',async()=>{
+  for(const [status,value] of [[403,missingSeat],[401,{errorCode:'invalid_session'}]]){
+    const f=await boot(fixture({savedRoom:savedRoom(),startupResponse:{status,value}}));
+    assert.equal(f.get('online.terminal'),'seat');assert.equal(f.requests.length,1);assert.equal(pollScheduled(f),false);assert.equal(f.session.has('ludo-room-v1'),false);
+  }
+});
+await test('server and network failure during reload preserve the valid saved seat',async()=>{
+  for(const startupResponse of [{status:503,value:{error:'Temporarily unavailable'}},{error:new Error('Network offline')}]){
+    const saved=savedRoom(),f=await boot(fixture({savedRoom:saved,startupResponse}));
+    assert.equal(f.get('online.terminal'),undefined);assert.equal(f.get('online.disconnected'),true);assert.equal(f.session.get('ludo-room-v1'),JSON.stringify(saved));assert.equal(pollScheduled(f),true);assert.equal(f.historyChanges.length,0);
+    f.setResponse(f.response({code:saved.code,state:saved.state}));await f.get('poll()');assert.equal(f.get('online.disconnected'),false);assert.equal(f.$('roll').disabled,false);
+  }
+});
+await test('temporary poll errors retain session and can reconnect at the same version',async()=>{
+  for(const status of [429,503]){
+    const f=fixture();f.online();f.get('rememberRoom()');const saved=f.session.get('ludo-room-v1');f.setResponse({error:'Try later'},status);await f.get('poll()');
+    assert.equal(f.get('online.terminal'),undefined);assert.equal(f.session.get('ludo-room-v1'),saved);assert.equal(pollScheduled(f),true);assert.equal(f.$('retry').hidden,false);
+    f.setResponse(f.response());await f.get('poll()');assert.equal(f.get('online.disconnected'),false);
+  }
+});
+await test('temporary action failure retains the exact idempotent retry',async()=>{
+  const f=fixture({initial:createGame()});f.online();f.get('rememberRoom()');const saved=f.session.get('ludo-room-v1');f.setFailure(new Error('offline'));await f.get('rollDice()');const id=f.requests[0].body.actionId;
+  assert.equal(f.get('pendingAction.actionId'),id);assert.equal(f.get('online.terminal'),undefined);assert.equal(f.session.get('ludo-room-v1'),saved);
+  f.setResponse(f.response({version:5,state:roll(createGame(),6).state}));await f.$('retry').dispatch('click');assert.equal(f.requests[1].body.actionId,id);assert.equal(f.get('pendingAction'),null);assert.equal(f.get('online.disconnected'),false);
+});
+await test('an ordinary forbidden-turn response never clears a valid seat',async()=>{
+  const f=fixture({initial:createGame()});f.online();f.get('rememberRoom()');const saved=f.session.get('ludo-room-v1');f.setResponse({error:'It is another player’s turn.'},403);await f.get('rollDice()');
+  assert.equal(f.get('online.terminal'),undefined);assert.equal(f.session.get('ludo-room-v1'),saved);assert.equal(f.historyChanges.length,0);
+});
+await test('late successful polling cannot resurrect a terminal session',async()=>{
+  const f=fixture();f.online();let finish;f.context.fetch=()=>new Promise(resolve=>finish=resolve);const pending=f.get('poll()');
+  f.get('endRoom({ok:false,status:404,value:{}});render()');finish({ok:true,status:200,json:async()=>f.response({version:5})});await pending;
+  assert.equal(f.get('online.terminal'),'room');assert.equal(pollScheduled(f),false);assert.equal(f.session.has('ludo-room-v1'),false);assert.equal(f.$('retry').hidden,true);
+});
+await test('late terminal polling from an old room cannot invalidate a new room',async()=>{
+  const f=fixture();f.online();let finish;f.context.fetch=()=>new Promise(resolve=>finish=resolve);const pending=f.get('poll()');
+  f.get('online={...online,code:"OTHER",token:"OTHER_TOKEN"}');finish({ok:false,status:404,json:async()=>expired});await pending;
+  assert.equal(f.get('online.code'),'OTHER');assert.equal(f.get('online.terminal'),undefined);
+});
+await test('terminal recovery opens the lobby and permits a fresh valid table',async()=>{
+  const f=fixture();f.online();f.setResponse(expired,404);await f.get('poll()');await f.$('online-open').dispatch('click');assert.equal(f.$('new-dialog').open,true);assert.equal(f.$('mode').value,'online');
+  f.setResponse(f.response({code:'1122334455667788',state:createGame()}));await f.get('enterRoom("create")');
+  assert.equal(f.get('online.terminal'),undefined);assert.equal(f.get('online.code'),'1122334455667788');assert.equal(f.$('new-dialog').open,false);assert.equal(f.$('roll').disabled,false);assert.equal(pollScheduled(f),true);assert.equal(f.session.has('ludo-room-v1'),true);
+});
+await test('terminal poll during an action or replay cancels busy recovery immediately',async()=>{
+  for(const flag of ['busy','visualBusy'])for(const [status,value] of [[404,expired],[403,missingSeat]]){
+    const f=fixture();f.online();f.get(`rememberRoom();${flag}=true;pendingAction={kind:'roll',actionId:'pending'}`);f.setResponse(value,status);await f.get('poll()');
+    assert.ok(f.get('online.terminal'));assert.equal(f.get('busy'),false);assert.equal(f.get('visualBusy'),false);assert.equal(f.get('pendingAction'),null);assert.equal(f.session.has('ludo-room-v1'),false);assert.equal(pollScheduled(f),false);
+    f.setFailure(new Error('offline'));await f.get('poll()');assert.equal(f.requests.length,1);assert.doesNotMatch(f.$('turn-cue').textContent,/seat is saved/i);
+  }
+});
+await test('late action success and failure cannot overwrite terminal feedback',async()=>{
+  for(const outcome of ['success','failure']){
+    const f=fixture({initial:createGame()});f.online();let resolve,reject;f.context.fetch=()=>new Promise((yes,no)=>{resolve=yes;reject=no;});const pending=f.get('rollDice()');
+    f.get('endRoom({ok:false,status:404,value:{}});render()');const message=f.$('status').textContent;
+    if(outcome==='success')resolve({ok:true,status:200,json:async()=>f.response({version:5})});else reject(Error('offline'));await pending;
+    assert.equal(f.$('status').textContent,message);assert.equal(f.get('online.terminal'),'room');assert.equal(f.get('busy'),false);assert.equal(pollScheduled(f),false);
+  }
+});
+await test('late action completion cannot unlock a replacement room in-flight action',async()=>{
+  const f=fixture({initial:createGame()});f.online();let finish;f.context.fetch=()=>new Promise(resolve=>finish=resolve);const pending=f.get('rollDice()');
+  f.get('endRoom({ok:false,status:404,value:{}});online={...online,code:"NEW",token:"NEW_TOKEN",terminal:undefined,disconnected:false};busy=true;pendingAction={actionId:"new-action"}');finish({ok:true,status:200,json:async()=>f.response({version:5})});await pending;
+  assert.equal(f.get('online.code'),'NEW');assert.equal(f.get('busy'),true);assert.equal(f.get('pendingAction.actionId'),'new-action');
+});
+await test('non-JSON errors preserve definitive HTTP status but never guess a missing-seat 403',async()=>{
+  for(const status of [404,401,403,503]){
+    const f=fixture();f.online();f.get('rememberRoom()');f.context.fetch=async()=>({ok:false,status,json:async()=>{throw new SyntaxError('not JSON');}});await f.get('poll()');
+    assert.equal(!!f.get('online.terminal'),status===404||status===401);assert.equal(f.session.has('ludo-room-v1'),status!==404&&status!==401);assert.equal(pollScheduled(f),status!==404&&status!==401);
+  }
+});
+await test('terminal recovery does not steal keyboard focus from an open dialog',async()=>{
+  const f=fixture();f.online();f.$('rules-dialog').showModal();f.$('rules-close').focus();f.setResponse(expired,404);await f.get('poll()');assert.equal(f.document.activeElement,f.$('rules-close'));
+});
 
 console.log(`${passed} arena motion-preference, polling and keyboard-focus checks passed. Real-device layout remains unverified.`);
