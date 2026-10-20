@@ -64,9 +64,11 @@ Rooms are inaccessible after expiry. Expired records are removed on new room cre
 - 24 deterministic frame-clock dice/token animation and asynchronous interaction checks
 - 50 arena keyboard, form-ownership, recovery, motion-preference, polling, preview, invitation and keyboard-focus regression checks
 - 21 move-guidance, seeded consistency, invitation parsing and turn-cue checks
+- 6 independent gameplay properties over 51,526 deterministic cases
+- 6 authoritative expiry/reconnect checks, including exact-boundary and simultaneous Create retries
 - JavaScript syntax and bundled Worker module checks
 
-145 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
+157 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
 
 Earlier local-browser setup was blocked. The later scoped Chromium results and remaining device limits are documented above.
 
@@ -90,3 +92,7 @@ The actual SVG board and pawns were rendered with Inkscape for component-level v
 Dice and token animations use a deterministic frame driver with requestAnimationFrame and a timer fallback, without requiring the Web Animations API. A visible roll stage stays on screen through tumble, settle and result. The die itself and the Roll button are both interactive. Motion defaults to Auto (respecting system reduced-motion preference), with explicit Full and Reduced options. Reduced mode keeps clear rolling/result feedback without travel or tumble.
 
 Tokens hop square by square along the actual path, launch from the yard, return after capture, visibly arrive at home before hiding, and rewind only post-checkpoint changes. Server-provided sanitized action events retain the latest 32 actions, so online clients can replay a roll and move received together. Input stays locked through playback; newer room versions queue. If history cannot be safely replayed or is too long, the client reconciles to authoritative state rather than inventing actions. Module URLs are versioned to distinguish this build from cached earlier clients.
+
+## Expiry-boundary source fix (October 20, 2026)
+
+The API now removes rooms at or before their expiry timestamp before attempting idempotent creation. This fixes a successful Create response returning an already-expired room at the exact 24-hour boundary. Custom gameplay rules are unchanged. See [expiry and gameplay review](docs/EXPIRY-REVIEW.md). This source fix is not yet verified on the hosted game; the previously verified keyboard/dialog release remains separate.

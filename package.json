@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node test.mjs && node review-tests.mjs && node server-review.mjs && node server-motion-review.mjs && node transport-review.mjs && node animation-review.mjs && node arena-review.mjs && node guidance-review.mjs",
+    "test": "node test.mjs && node review-tests.mjs && node server-review.mjs && node server-motion-review.mjs && node transport-review.mjs && node animation-review.mjs && node arena-review.mjs && node guidance-review.mjs && node gameplay-review.mjs && node server-recovery-review.mjs",
     "build": "node scripts/build.mjs",
     "dev": "node scripts/build.mjs && node scripts/dev.mjs"
   }
