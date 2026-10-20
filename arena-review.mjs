@@ -11,6 +11,7 @@ import {tokenChanges,replayEvents} from './public/motion.mjs';
 // against a small DOM with focus/removal semantics. No browser or network is used.
 // These checks do not certify CSS layout, safe areas, or real-device rendering.
 const source=readFileSync(new URL('./public/app.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+const html=readFileSync(new URL('./public/index.html',import.meta.url),'utf8');
 const css=readFileSync(new URL('./public/style.css',import.meta.url),'utf8');
 let passed=0;
 async function test(name,check){await check();passed++;console.log('PASS',name);}
@@ -215,7 +216,7 @@ await test('empty online seats and own seat have distinct readable labels',()=>{
   assert.match(f.$('players').children[0].innerHTML,/YOU/);assert.match(f.$('players').children[1].innerHTML,/WAITING FOR FRIEND/);assert.match(f.$('players').children[1].className,/seat-empty/);assert.equal(f.$('turn-name').textContent,'Waiting for friends');
 });
 await test('paste-and-join sends only the parsed room code',async()=>{
-  const f=fixture();f.$('room-code').value='https://example.test/#room=abcdef0123456789';f.$('count').value='2';f.setResponse({...f.response(),code:'ABCDEF0123456789'});await f.$('join').dispatch('click');
+  const f=fixture();f.$('room-code').value='https://example.test/#room=abcdef0123456789';f.$('count').value='2';f.setResponse({...f.response(),code:'ABCDEF0123456789'});await f.$('join-form').dispatch('submit',{preventDefault(){}});
   assert.equal(f.requests[0].path,'/api/join/ABCDEF0123456789');assert.equal(f.get('online.code'),'ABCDEF0123456789');
 });
 
@@ -327,6 +328,58 @@ await test('non-JSON errors preserve definitive HTTP status but never guess a mi
 });
 await test('terminal recovery does not steal keyboard focus from an open dialog',async()=>{
   const f=fixture();f.online();f.$('rules-dialog').showModal();f.$('rules-close').focus();f.setResponse(expired,404);await f.get('poll()');assert.equal(f.document.activeElement,f.$('rules-close'));
+});
+
+
+await test('native invite form ownership makes Join the default submitter, separate from Close and Create',()=>{
+  const owners={},forms={},buttons={};let currentForm=null;
+  for(const [tag] of html.matchAll(/<\/?form\b[^>]*>|<(?:button|input)\b[^>]*>/g)){
+    if(tag.startsWith('</form')){assert.ok(currentForm);currentForm=null;continue;}
+    const id=/\bid="([^"]+)"/.exec(tag)?.[1];
+    if(tag.startsWith('<form')){assert.equal(currentForm,null,'Forms must not nest');currentForm=id;forms[id]=tag;buttons[id]=[];continue;}
+    if(id)owners[id]=currentForm;
+    if(tag.startsWith('<button')&&currentForm&&!/\btype="button"/.test(tag))buttons[currentForm].push(id??/\bvalue="([^"]+)"/.exec(tag)?.[1]);
+  }
+  assert.equal(currentForm,null);assert.equal(owners['room-code'],'join-form');assert.equal(owners.join,'join-form');assert.equal(owners.start,'new-form');assert.deepEqual(buttons['join-form'],['join']);assert.deepEqual(buttons['new-form'],['cancel','start']);assert.match(forms['new-form'],/method="dialog"/);assert.doesNotMatch(forms['join-form'],/method="dialog"/);
+});
+await test('both dialogs have unique accessible names tied to visible headings',()=>{
+  for(const [dialog,title,text] of [['new-dialog','new-title','Let’s play.'],['rules-dialog','rules-title','The house rules.']]){
+    assert.match(html,new RegExp(`<dialog id="${dialog}" aria-labelledby="${title}">`));assert.ok(html.includes(`<h2 id="${title}">${text}</h2>`));assert.equal((html.match(new RegExp(`id="${title}"`,'g'))??[]).length,1);
+  }
+});
+await test('native Join submit cancels navigation synchronously and never creates a table',async()=>{
+  const f=fixture();f.$('new-dialog').showModal();f.$('room-code').value='https://example.test/#room=abcdef0123456789';f.$('count').value='2';let prevented=false,path;
+  f.context.fetch=async(url)=>{assert.equal(prevented,true);path=url;return {ok:true,status:200,json:async()=>f.response({code:'ABCDEF0123456789'})};};
+  await f.$('join-form').dispatch('submit',{preventDefault(){prevented=true;}});assert.equal(path,'/api/join/ABCDEF0123456789');assert.equal(f.$('new-dialog').open,false);
+});
+await test('invalid keyboard Join submissions stay in the dialog and retain input focus',async()=>{
+  for(const value of ['', 'invalid', 'https://foreign.test/#room=ABCDEF0123456789']){
+    const f=fixture();f.$('new-dialog').showModal();f.$('room-code').value=value;f.$('room-code').focus();let prevented=false;
+    await f.$('join-form').dispatch('submit',{preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.equal(f.requests.length,0);assert.equal(f.$('new-dialog').open,true);assert.equal(f.document.activeElement,f.$('room-code'));assert.match(f.$('lobby-error').textContent,/Paste the invite link/);
+  }
+});
+await test('server-rejected keyboard Join remains open without creating or leaving a table',async()=>{
+  const f=fixture();f.online();const before=f.get('JSON.stringify(online)');f.$('new-dialog').showModal();f.$('room-code').value='0000000000000000';f.$('room-code').focus();f.$('count').value='2';f.setResponse(expired,404);let prevented=false;
+  await f.$('join-form').dispatch('submit',{preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.equal(f.requests.length,1);assert.equal(f.requests[0].path,'/api/join/0000000000000000');assert.equal(f.get('JSON.stringify(online)'),before);assert.equal(f.$('new-dialog').open,true);assert.equal(f.document.activeElement,f.$('room-code'));assert.equal(f.$('lobby-error').textContent,expired.error);
+});
+await test('repeated Join submit while busy is prevented and sends only one request',async()=>{
+  const f=fixture();f.$('new-dialog').showModal();f.$('room-code').value='ABCDEF0123456789';f.$('count').value='2';let finish,calls=0,prevented=0;
+  f.context.fetch=()=>{calls++;return new Promise(resolve=>finish=resolve);};const pending=f.$('join-form').dispatch('submit',{preventDefault(){prevented++;}});
+  await f.$('join-form').dispatch('submit',{preventDefault(){prevented++;}});assert.equal(calls,1);assert.equal(prevented,2);assert.equal(f.$('join').disabled,true);
+  finish({ok:true,status:200,json:async()=>f.response({code:'ABCDEF0123456789'})});await pending;assert.equal(f.get('busy'),false);assert.equal(f.$('new-dialog').open,false);
+});
+await test('explicit Close keeps its native dialog action and sends no request',async()=>{
+  const f=fixture();const before=f.get('JSON.stringify(state)');let prevented=false;
+  await f.$('new-form').dispatch('submit',{submitter:{value:'cancel'},preventDefault(){prevented=true;}});assert.equal(prevented,false);assert.equal(f.requests.length,0);assert.equal(f.get('JSON.stringify(state)'),before);
+});
+await test('explicit Create is independent of any invite-field value',async()=>{
+  const f=fixture();f.$('new-dialog').showModal();f.$('room-code').value='ABCDEF0123456789';f.$('count').value='2';f.$('mode').value='online';f.setResponse(f.response());let prevented=false;
+  await f.$('new-form').dispatch('submit',{submitter:{value:'start'},preventDefault(){prevented=true;}});await boot(f);assert.equal(prevented,true);assert.equal(f.requests.length,1);assert.equal(f.requests[0].path,'/api/create');
+});
+await test('explicit local Create and Rules Close preserve their existing actions',async()=>{
+  const f=fixture();f.$('new-dialog').showModal();f.$('mode').value='local';f.$('count').value='3';let prevented=false;
+  await f.$('new-form').dispatch('submit',{submitter:{value:'start'},preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.equal(f.$('new-dialog').open,false);assert.equal(f.get('state.players.length'),3);assert.equal(f.requests.length,0);
+  f.$('rules-dialog').showModal();await f.$('rules-close').dispatch('click');assert.equal(f.$('rules-dialog').open,false);
 });
 
 console.log(`${passed} arena motion-preference, polling and keyboard-focus checks passed. Real-device layout remains unverified.`);

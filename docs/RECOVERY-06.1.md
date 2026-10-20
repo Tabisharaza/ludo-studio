@@ -20,4 +20,4 @@ Recovery cases include active polling, reload, action failure, invalid seat, sam
 
 ## Separate follow-up
 
-The keyboard review identified an existing lobby issue: Enter in the invite field uses the form’s first implicit submit button, Close, rather than Join. Join-click flow is covered; native Enter behavior is not browser verified. Addressing this and adding accessible dialog names is a separate focused milestone, not part of the recovery patch.
+The keyboard review identified an existing lobby issue: Enter in the invite field uses the form’s first implicit submit button, Close, rather than Join. Join-click flow is covered; native Enter behavior is not browser verified. This was subsequently addressed in the separate [Build 06.2 keyboard patch](KEYBOARD-06.2.md), not in the recovery patch.

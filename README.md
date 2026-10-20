@@ -4,6 +4,12 @@ Original responsive Ludo for 2–4 people, locally on one screen or online in in
 
 Play online: https://ludo-studio-sentinel.tabisharaza.chatgpt.site
 
+## Keyboard lobby patch (Build 06.2)
+
+Pressing Enter in the invite input now submits Join and runs the same validation as clicking it. Join has its own native form, separate from Close/Create, and both dialogs have accessible names tied to their visible headings. Explicit Close, Escape and existing game/session behavior are retained.
+
+[Patch details](docs/KEYBOARD-06.2.md). All 145 automated checks and the Worker build pass. The pre-patch Enter-to-Close defect was also reproduced in cloud Chromium. The automated fixture alone does not establish native-browser keyboard behavior or overall accessibility compliance.
+
 ## Room recovery patch (Build 06.1)
 
 Expired or missing tables and invalid seat sessions now stop reconnecting and offer an accurate Create / join table path. Only the invalid tab session is removed; the last board remains visible. Temporary network/server failures keep the saved seat and safe same-action retry. Ordinary turn conflicts do not invalidate a seat. Server error metadata is additive; game rules, dice, expiry duration and authoritative validation are unchanged.
@@ -56,11 +62,11 @@ Rooms are inaccessible after expiry. Expired records are removed on new room cre
 - 5 server-side checkpoint and bounded-event replay checks
 - 6 independent frontend transport race checks
 - 24 deterministic frame-clock dice/token animation and asynchronous interaction checks
-- 41 arena recovery, motion-preference, polling, preview, invitation and keyboard-focus regression checks
+- 50 arena keyboard, form-ownership, recovery, motion-preference, polling, preview, invitation and keyboard-focus regression checks
 - 21 move-guidance, seeded consistency, invitation parsing and turn-cue checks
 - JavaScript syntax and bundled Worker module checks
 
-136 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
+145 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
 
 Earlier local-browser setup was blocked. The later scoped Chromium results and remaining device limits are documented above.
 
