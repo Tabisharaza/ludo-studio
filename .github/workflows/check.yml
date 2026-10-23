@@ -18,8 +18,16 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: '24'
+          node-version-file: '.node-version'
           package-manager-cache: false
+      - name: Verify pinned Node.js runtime
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          assert.equal(process.versions.node, readFileSync('.node-version', 'utf8').trim());
+          console.log(`Node.js ${process.version}`);
+          NODE
       # No runtime or development dependencies; no install step is required.
       - run: npm test
       - run: npm run build

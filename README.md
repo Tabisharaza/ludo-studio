@@ -30,7 +30,9 @@ On 19 October 2026, actual cloud Chromium inspection verified the desktop arena,
 
 ## Development
 
-Node.js 24 or newer. No dependencies to install.
+Use Node.js **24.22.1**, pinned in `.node-version`, as the recommended development and CI security/toolchain baseline. The [October 21, 2026 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) includes the eMudhra CA remediation and other security fixes; see the [24.22.1 release notes](https://nodejs.org/en/blog/release/v24.22.1).
+
+The unchanged `package.json` declaration, `engines.node: ">=24"`, is a compatibility range, not the security baseline or a claim that every matching version has those fixes. Select 24.22.1 before running the commands below. No dependencies to install.
 
     npm test
     npm run dev
@@ -68,7 +70,9 @@ Rooms are inaccessible after expiry. Expired records are removed on new room cre
 - 6 authoritative expiry/reconnect checks, including exact-boundary and simultaneous Create retries
 - JavaScript syntax and bundled Worker module checks
 
-157 automated checks in total. GitHub Actions runs the same tests and build on Node 24 with read-only permissions; no dependency installation is needed.
+157 automated checks in total. GitHub Actions reads the exact Node.js version from `.node-version` (24.22.1), asserts the actual runtime matches, and runs the same tests and build with read-only permissions; no dependency installation is needed. This pins the Node.js used by project commands, not the GitHub runner's separate action runtime or the hosted Cloudflare Worker runtime; neither environment is patched or redeployed by this change.
+
+Local verification on October 23, 2026 with Node.js 24.22.1: all 157 checks, 21 JavaScript module syntax checks and the Worker build passed; repeated builds were byte-identical. These local results do not establish hosted CI, deployment, or new browser/device coverage.
 
 Earlier local-browser setup was blocked. The later scoped Chromium results and remaining device limits are documented above.
 
