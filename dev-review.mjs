@@ -1,0 +1,26 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp, mkdir, copyFile, writeFile, rm, access} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {createServer} from 'node:net';
+import {spawn} from 'node:child_process';
+import {parseDevOptions} from './scripts/dev-options.mjs';
+
+test('development defaults retain loopback port 8792',()=>assert.deepEqual(parseDevOptions([]),{host:'127.0.0.1',port:8792}));
+test('managed preview arguments select the requested strict loopback port',()=>assert.deepEqual(parseDevOptions(['--host','127.0.0.1','--port','4173','--strictPort']),{host:'127.0.0.1',port:4173}));
+test('strict ports and reordered arguments preserve default host',()=>assert.deepEqual(parseDevOptions(['--strictPort','--port','65535']),{host:'127.0.0.1',port:65535}));
+for(const value of ['0','-1','65536','1.5','NaN','Infinity','1e3','04173','999999999999999999999',''])test(`invalid port rejected: ${JSON.stringify(value)}`,()=>assert.throws(()=>parseDevOptions(['--port',value]),/port must/));
+for(const value of ['0.0.0.0','::','localhost','192.168.1.1'])test(`non-contract host rejected: ${value}`,()=>assert.throws(()=>parseDevOptions(['--host',value]),/loopback only/));
+for(const flag of ['--port','--host','--strictPort'])test(`duplicate ${flag} rejected`,()=>{const args=flag==='--strictPort'?[flag,flag]:[flag,flag==='--port'?'4173':'127.0.0.1',flag,flag==='--port'?'4174':'127.0.0.1'];assert.throws(()=>parseDevOptions(args),/Duplicate/);});
+test('unknown options and missing values rejected',()=>{for(const args of [['--wat'],['--port=4173'],['4173'],['--port'],['--host'],['--port','--strictPort']])assert.throws(()=>parseDevOptions(args));});
+
+async function fixture(){const directory=await mkdtemp(join(tmpdir(),'ludo-dev-review-'));await mkdir(join(directory,'scripts'));await mkdir(join(directory,'dist/server'),{recursive:true});await mkdir(join(directory,'drizzle'));for(const file of ['dev.mjs','dev-options.mjs'])await copyFile(new URL(`./scripts/${file}`,import.meta.url),join(directory,'scripts',file));await writeFile(join(directory,'package.json'),'{"type":"module"}');await writeFile(join(directory,'drizzle/0000_rooms.sql'),'CREATE TABLE rooms (id TEXT);');await writeFile(join(directory,'dist/server/index.js'),"export default { async fetch(request) { return new Response(request.url); } };\n");return directory;}
+function run(directory,args){const child=spawn(process.execPath,['scripts/dev.mjs',...args],{cwd:directory,stdio:['ignore','pipe','pipe']});let stdout='',stderr='';child.stdout.on('data',data=>stdout+=data);child.stderr.on('data',data=>stderr+=data);const ended=new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',(code,signal)=>resolve({code,signal}));});return {child,ended,get stdout(){return stdout;},get stderr(){return stderr;}};}
+async function within(promise){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Development server test timed out')),10000);})]);}finally{clearTimeout(timer);}}
+async function reserve(){const server=createServer();await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});return {server,port:server.address().port};}
+const close=server=>new Promise(resolve=>server.close(resolve));
+
+test('custom port serves with matching request origin, no fallback',async()=>{const directory=await fixture();const reservation=await reserve();const port=reservation.port;await close(reservation.server);const proc=run(directory,['--host','127.0.0.1','--port',String(port),'--strictPort']);try{await within(new Promise((resolve,reject)=>{proc.child.stdout.on('data',()=>{if(proc.stdout.includes(`http://127.0.0.1:${port}`))resolve();});proc.ended.then(result=>reject(new Error(`Exited before ready: ${result.code} ${proc.stderr}`)));}));const response=await fetch(`http://127.0.0.1:${port}/probe?x=1`);assert.equal(response.status,200);assert.equal(await response.text(),`http://127.0.0.1:${port}/probe?x=1`);}finally{proc.child.kill('SIGTERM');await proc.ended;await rm(directory,{recursive:true,force:true});}});
+test('occupied strict port exits nonzero rather than choosing another port',async()=>{const directory=await fixture();const reservation=await reserve();const proc=run(directory,['--port',String(reservation.port),'--strictPort']);try{const result=await within(proc.ended);assert.equal(result.code,1);assert.match(proc.stderr,/EADDRINUSE/);assert.doesNotMatch(proc.stdout,/Ludo Studio: http/);}finally{proc.child.kill('SIGTERM');await proc.ended;await close(reservation.server);await rm(directory,{recursive:true,force:true});}});
+test('invalid arguments fail before database or worker initialization',async()=>{const directory=await fixture();await rm(join(directory,'dist'),{recursive:true});const proc=run(directory,['--port','65536']);try{const result=await within(proc.ended);assert.equal(result.code,2);assert.match(proc.stderr,/port must/);await assert.rejects(access(join(directory,'.local')));assert.doesNotMatch(proc.stderr,/ERR_MODULE_NOT_FOUND/);}finally{proc.child.kill('SIGTERM');await proc.ended;await rm(directory,{recursive:true,force:true});}});

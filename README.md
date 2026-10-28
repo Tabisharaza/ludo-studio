@@ -39,6 +39,12 @@ The unchanged `package.json` declaration, `engines.node: ">=24"`, is a compatibi
 
 Open http://localhost:8792. The development server uses Node's built-in SQLite and stores local room data in ignored `.local/`. `npm run build` bundles the frontend and API into a Cloudflare-compatible Worker. Hosted data uses the Sites-provisioned D1 binding `DB`, with the schema migration in `drizzle/`. GitHub Pages alone cannot run this backend; publish the source on GitHub and link the hosted game, or deploy the Worker to a compatible host.
 
+For managed preview (or a different local port), the development adapter accepts:
+
+    npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
+
+The default remains port 8792 on loopback. Only `127.0.0.1` is accepted as the bind host; no public-network binding is enabled. Ports are always strict: an occupied port exits with an error rather than selecting another. Invalid, repeated, or unknown options fail before loading the Worker or creating a local database. The development adapter and its flags do not change the hosted Worker. See [the preview-harness repair evidence](docs/DEV-PREVIEW-REVIEW.md).
+
 ## Custom rules
 
 - Six starts a yard piece or moves an eligible piece six steps.
