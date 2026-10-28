@@ -32,7 +32,7 @@ export function turnCue(state,online,{busy=false,pending=false}={}){
   if(state.winner!==null)return {kind:'won',title:`${names[state.winner]} wins!`,hint:'All four pieces home. Start a new table to play again.'};
   if(busy)return {kind:'busy',title:'Playing the move',hint:'Your table is updating. Moves unlock when the animation finishes.'};
   if(online&&online.seat!==state.turn)return {kind:'waiting',title:`${name} is playing`,hint:`You’re ${names[state.players[online.seat]]}. Watch the board; your turn will light up.`};
-  return {kind:'ready',title:online?'Your turn':`${name}’s turn`,hint:state.dice!==null?`Rolled ${state.dice} · ${legalMoves(state).length} legal choice${legalMoves(state).length===1?'':'s'}. Hover or focus to preview.`:state.locked.length?'Capture saved. Roll again using a different piece.':state.tokens[player].every(p=>p===-1)?'Roll a six to bring a piece out.':online?'Tap the dice to roll.':'Pass the screen, then roll.'};
+  return {kind:'ready',title:online?'Your turn':`${name}’s turn`,hint:state.dice!==null?`Rolled ${state.dice} · ${legalMoves(state).length} legal choice${legalMoves(state).length===1?'':'s'}. Use Preview to inspect, or tap a piece to move.`:state.locked.length?'Capture saved. Roll again using a different piece.':state.tokens[player].every(p=>p===-1)?'Roll a six to bring a piece out.':online?'Tap the dice to roll.':'Pass the screen, then roll.'};
 }
 
 export function parseInvite(input,origin='https://ludo-studio-sentinel.tabisharaza.chatgpt.site'){

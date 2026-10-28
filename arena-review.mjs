@@ -192,6 +192,95 @@ await test('focus and pointer preview draw the legal route without changing the 
   await f.$('piece-actions').children[0].dispatch('focus');assert.equal(f.get('previewLayer.children.length'),6);assert.equal(f.get('previewLayer.children[5].textContent'),'1');assert.equal(f.$('move-detail').hidden,false);assert.equal(f.$('turn-cue').hidden,true);assert.equal(f.get('JSON.stringify(state)'),before);
   await f.$('piece-actions').children[0].dispatch('blur');assert.equal(f.get('previewLayer.children.length'),0);assert.equal(f.$('move-detail').hidden,true);assert.equal(f.$('turn-cue').hidden,false);
 });
+await test('explicit Preview buttons inspect every legal piece without a local move or request',async()=>{
+  const initial=createGame();initial.tokens[0]=[3,10,-1,56];initial.dice=6;
+  const f=fixture({initial}),before=f.get('JSON.stringify(state)');
+  const controls=f.$('preview-actions').children;
+  assert.equal(controls.length,4);assert.equal(f.$('preview-controls').hidden,false);
+  for(const index of [0,1,2]){
+    assert.equal(controls[index].disabled,false);
+    assert.equal(controls[index].getAttribute('aria-label'),`Preview piece ${index+1} without moving`);
+    await controls[index].dispatch('click');
+    assert.equal(f.get('explicitPreview'),index);
+    assert.equal(controls[index].getAttribute('aria-pressed'),'true');
+    assert.equal(f.$('preview-dismiss').hidden,false);
+    assert.equal(f.get('JSON.stringify(state)'),before);assert.equal(f.requests.length,0);
+  }
+  assert.equal(controls[3].disabled,true);
+});
+await test('explicit online Preview never sends an action and persists through pointer exit and blur',async()=>{
+  const f=fixture();f.online();const before=f.get('JSON.stringify(state)');
+  await f.$('preview-actions').children[0].dispatch('click');
+  await f.$('piece-actions').children[0].dispatch('pointerleave');
+  await f.$('piece-actions').children[0].dispatch('blur');
+  f.get('previewMove(1)');
+  assert.equal(f.get('explicitPreview'),0);assert.equal(f.get('previewLayer.children.length'),1);
+  assert.match(f.$('move-detail').textContent,/Piece 1/);
+  assert.equal(f.requests.length,0);assert.equal(f.get('JSON.stringify(state)'),before);
+});
+await test('Preview toggles off and explicit dismiss restores focus without committing a move',async()=>{
+  const f=fixture(),button=f.$('preview-actions').children[0];
+  await button.dispatch('click');await button.dispatch('click');
+  assert.equal(f.get('explicitPreview'),null);assert.equal(f.get('previewLayer.children.length'),0);
+  await button.dispatch('click');f.$('preview-dismiss').focus();await f.$('preview-dismiss').dispatch('click');
+  assert.equal(f.get('explicitPreview'),null);assert.equal(f.get('previewLayer.children.length'),0);
+  assert.equal(f.$('preview-dismiss').hidden,true);assert.equal(f.document.activeElement,button);
+  assert.equal(button.getAttribute('aria-pressed'),'false');assert.equal(f.requests.length,0);
+});
+await test('Move remains one-click after preview and consumes exactly one online action',async()=>{
+  const f=fixture();f.online();await f.$('preview-actions').children[0].dispatch('click');
+  const next=move(roll(createGame(),6).state,0).state;f.setResponse(f.response({version:5,state:next}));
+  await f.$('piece-actions').children[0].dispatch('click');
+  assert.equal(f.requests.length,1);assert.equal(f.requests[0].body.kind,'move');assert.equal(f.requests[0].body.index,0);
+  assert.equal(f.get('state.tokens[0][0]'),0);assert.equal(f.get('explicitPreview'),null);
+});
+await test('unchanged online polling retains explicit preview but newer state invalidates it',async()=>{
+  const f=fixture();f.online();await f.$('preview-actions').children[0].dispatch('click');
+  f.setResponse(f.response());await f.get('poll()');assert.equal(f.get('explicitPreview'),0);
+  f.setResponse(f.response({version:5,state:move(roll(createGame(),6).state,0).state}));await f.get('poll()');
+  assert.equal(f.get('explicitPreview'),null);assert.equal(f.get('previewLayer.children.length'),0);
+});
+await test('preview controls disappear or reject stale events when play is unavailable',async()=>{
+  for(const change of ['busy=true','visualBusy=true','pendingAction={kind:"move"}','online.disconnected=true','online.ready=false','online.seat=1','online.terminal="room"']){
+    const f=fixture();f.online();const stale=f.$('preview-actions').children[0];await stale.dispatch('click');
+    f.get(change+';render()');assert.equal(f.get('explicitPreview'),null,change);assert.equal(f.$('preview-controls').hidden,true,change);
+    await stale.dispatch('click');assert.equal(f.get('previewLayer.children.length'),0,change);assert.equal(f.requests.length,0,change);
+  }
+});
+await test('legal-state changes and dialogs invalidate or suppress explicit previews',async()=>{
+  for(const change of ['state.locked=[0]','state.dice=null','state.tokens[0][0]=56']){
+    const f=fixture();await f.$('preview-actions').children[0].dispatch('click');f.get(change+';render()');
+    assert.equal(f.get('explicitPreview'),null);f.get('togglePreview(0)');assert.equal(f.get('previewLayer.children.length'),0);
+  }
+  for(const dialog of ['new-dialog','rules-dialog']){
+    const f=fixture();f.$(dialog).showModal();await f.$('preview-actions').children[0].dispatch('click');
+    assert.equal(f.get('explicitPreview'),null);assert.equal(f.get('previewLayer.children.length'),0);assert.equal(f.requests.length,0);
+  }
+});
+await test('normal rerender restores a focused Preview control without activating it',()=>{
+  const f=fixture();const original=f.$('preview-actions').children[0];original.focus();f.get('render()');
+  const replacement=f.$('preview-actions').children[0];assert.notEqual(original,replacement);assert.equal(f.document.activeElement,replacement);
+  assert.equal(f.get('explicitPreview'),null);assert.equal(f.get('previewLayer.children.length'),0);
+});
+await test('opening either real dialog clears a pinned preview without moving',async()=>{
+  for(const opener of ['new-open','rules-open','rules-bottom']){
+    const f=fixture();await f.$('preview-actions').children[0].dispatch('click');
+    await f.$(opener).dispatch('click');assert.equal(f.get('explicitPreview'),null);
+    assert.equal(f.get('previewLayer.children.length'),0);assert.equal(f.requests.length,0);
+  }
+});
+await test('explicit preview works in reduced motion and local Move still commits on its first click',async()=>{
+  const initial=roll(createGame(),6).state,f=fixture({initial,preference:'reduced'});
+  await f.$('preview-actions').children[0].dispatch('click');assert.equal(f.get('previewLayer.children.length'),1);
+  assert.equal(f.get('state.tokens[0][0]'),-1);await f.$('piece-actions').children[0].dispatch('click');
+  assert.equal(f.get('state.tokens[0][0]'),0);assert.equal(f.get('explicitPreview'),null);assert.equal(f.requests.length,0);
+});
+await test('Preview controls are separate semantic buttons with explicit hidden and target-size styles',()=>{
+  assert.match(html,/id="preview-controls"[^>]*hidden/);assert.match(html,/id="preview-actions"/);assert.match(html,/id="preview-dismiss"[^>]*type="button"/);
+  assert.match(html,/id="move-detail"[^>]*aria-live="polite"/);
+  assert.match(css,/\.preview-controls\[hidden\]/);assert.match(css,/#preview-dismiss\[hidden\]/);assert.match(css,/\.preview-actions button[^}]*min-height:44px/);
+  const f=fixture();for(const b of f.$('preview-actions').children){assert.equal(b.tagName,'BUTTON');assert.equal(b.type,'button');assert.equal(b.getAttribute('aria-controls'),'board move-detail');assert.equal(b.children.length,0);}
+});
 await test('preview disappears during playback and never exposes opponent choices',()=>{
   const f=fixture();f.get('previewMove(0)');assert.equal(f.get('previewLayer.children.length'),1);f.get('busy=true;render();previewMove(0)');assert.equal(f.get('previewLayer.children.length'),0);
   f.get('busy=false');f.online();f.get('online.seat=1;render();previewMove(0)');assert.equal(f.get('previewLayer.children.length'),0);
