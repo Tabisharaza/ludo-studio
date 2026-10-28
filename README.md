@@ -74,9 +74,11 @@ Rooms are inaccessible after expiry. Expired records are removed on new room cre
 - 21 move-guidance, seeded consistency, invitation parsing and turn-cue checks
 - 6 independent gameplay properties over 51,526 deterministic cases
 - 13 authoritative expiry/reconnect checks, including exact-boundary creation, delayed old-room writes, same-incarnation contention and safe retries
+- 11 authoritative request-boundary checks, including concurrent capacity admission, same-token retries, expiry cleanup, sanitized SQL failures and strict ID types
+- 24 development-preview argument and server checks
 - JavaScript syntax and bundled Worker module checks
 
-175 automated checks in total. GitHub Actions reads the exact Node.js version from `.node-version` (24.22.1), asserts the actual runtime matches, and runs the same tests and build with read-only permissions; no dependency installation is needed. This pins the Node.js used by project commands, not the GitHub runner's separate action runtime or the hosted Cloudflare Worker runtime; neither environment is patched or redeployed by this change.
+210 automated checks in total. GitHub Actions reads the exact Node.js version from `.node-version` (24.22.1), asserts the actual runtime matches, and runs the same tests and build with read-only permissions; no dependency installation is needed. This pins the Node.js used by project commands, not the GitHub runner's separate action runtime or the hosted Cloudflare Worker runtime; neither environment is patched or redeployed by this change.
 
 Local verification on October 23, 2026 with Node.js 24.22.1: all 157 checks, 21 JavaScript module syntax checks and the Worker build passed; repeated builds were byte-identical. These local results do not establish hosted CI, deployment, or new browser/device coverage.
 
@@ -114,3 +116,7 @@ Delayed joins/actions now match the original room expiry as well as code/version
 ## Explicit move previews (source, October 28, 2026)
 
 Preview 1–4 buttons let players inspect a route without hovering or committing a move. A selected preview stays visible until dismissed, replaced or invalidated; the existing piece cards still move on one click. Clear button labels, pressed state and a Dismiss preview action support keyboard and touch-oriented use. Eleven new production-app fixture checks bring the source total to 175. No rule, API or animation changes are included. See [scope and test evidence](docs/EXPLICIT-PREVIEW-REVIEW.md). Actual mobile layout/touch and native assistive-technology checks remain unverified; no new hosted deployment is claimed.
+
+## Request-boundary fixes (source, October 28, 2026)
+
+New tables now claim capacity inside the insert statement, preventing concurrent creates from exceeding the existing 2,000-room cap. Same-token retries still recover their table, including when another retry claimed the final slot. Tokens and action IDs must now be primitive strings rather than coercible arrays or objects. Eleven new checks bring the current local total to 210, including the 24 development-preview checks. See [reproduction, SQL contract and limits](docs/REQUEST-BOUNDARY-REVIEW.md). Valid-client behavior, game rules, seat ownership, schema and expiry duration are unchanged; no hosted deployment is claimed.
