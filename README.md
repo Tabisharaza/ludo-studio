@@ -67,10 +67,10 @@ Rooms are inaccessible after expiry. Expired records are removed on new room cre
 - 50 arena keyboard, form-ownership, recovery, motion-preference, polling, preview, invitation and keyboard-focus regression checks
 - 21 move-guidance, seeded consistency, invitation parsing and turn-cue checks
 - 6 independent gameplay properties over 51,526 deterministic cases
-- 6 authoritative expiry/reconnect checks, including exact-boundary and simultaneous Create retries
+- 13 authoritative expiry/reconnect checks, including exact-boundary creation, delayed old-room writes, same-incarnation contention and safe retries
 - JavaScript syntax and bundled Worker module checks
 
-157 automated checks in total. GitHub Actions reads the exact Node.js version from `.node-version` (24.22.1), asserts the actual runtime matches, and runs the same tests and build with read-only permissions; no dependency installation is needed. This pins the Node.js used by project commands, not the GitHub runner's separate action runtime or the hosted Cloudflare Worker runtime; neither environment is patched or redeployed by this change.
+164 automated checks in total. GitHub Actions reads the exact Node.js version from `.node-version` (24.22.1), asserts the actual runtime matches, and runs the same tests and build with read-only permissions; no dependency installation is needed. This pins the Node.js used by project commands, not the GitHub runner's separate action runtime or the hosted Cloudflare Worker runtime; neither environment is patched or redeployed by this change.
 
 Local verification on October 23, 2026 with Node.js 24.22.1: all 157 checks, 21 JavaScript module syntax checks and the Worker build passed; repeated builds were byte-identical. These local results do not establish hosted CI, deployment, or new browser/device coverage.
 
@@ -100,3 +100,7 @@ Tokens hop square by square along the actual path, launch from the yard, return 
 ## Expiry-boundary source fix (October 20, 2026)
 
 The API now removes rooms at or before their expiry timestamp before attempting idempotent creation. This fixes a successful Create response returning an already-expired room at the exact 24-hour boundary. Custom gameplay rules are unchanged. See [expiry and gameplay review](docs/EXPIRY-REVIEW.md). This source fix is not yet verified on the hosted game; the previously verified keyboard/dialog release remains separate.
+
+## Room-incarnation source fix (October 28, 2026)
+
+Delayed joins/actions now match the original room expiry as well as code/version, preventing an old request from overwriting a recreated table. Missing or replaced rooms return terminal recovery instead of a replacement board or retryable failure. Seven new checks bring the local total to 164; custom rules and database schema are unchanged. See [reproduction, invariant and verification limits](docs/ROOM-INCARNATION-REVIEW.md). No new hosted deployment is claimed.

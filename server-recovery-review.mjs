@@ -15,6 +15,7 @@ crypto.getRandomValues = array => { array[0] = nextDie - 1; return array; };
 const tokens = ['a', 'b', 'c', 'd'].map(char => char.repeat(64));
 const actionId = () => (++sequence).toString(16).padStart(32, '0');
 function fixture() {
+  let beforeWrite = null;
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('./drizzle/0000_rooms.sql', import.meta.url), 'utf8'));
   const env = {DB: {prepare(sql) {
@@ -22,7 +23,7 @@ function fixture() {
     return {
       bind(...args) { values = args; return this; },
       async first() { return db.prepare(sql).get(...values) ?? null; },
-      async run() { return {meta: db.prepare(sql).run(...values)}; },
+      async run() { if (sql.startsWith('UPDATE rooms') && beforeWrite) { const hook = beforeWrite; beforeWrite = null; await hook(); } return {meta: db.prepare(sql).run(...values)}; },
     };
   }}};
   async function request(path, data) {
@@ -49,7 +50,7 @@ function fixture() {
     db.prepare('UPDATE rooms SET data = ? WHERE code = ?').run(JSON.stringify(data), code);
     return row.version;
   }
-  return {db, request, room, seed};
+  return {db, request, room, seed, interceptWrite(hook) { beforeWrite = hook; }};
 }
 async function test(name, run) { await run(); passed++; console.log('PASS', name); }
 
@@ -99,6 +100,115 @@ try {
     assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM rooms').get().n, 1);
     const read = await f.request('/api/state/' + first.code, {token: tokens[0]});
     assert.equal(read.status, 200);
+    f.db.close();
+  });
+
+  await test('expiry identifies each incarnation even with fixed-clock same-token recreation retries', async () => {
+    const f = fixture();
+    let view = (await f.request('/api/create', {token: tokens[0], count: 2})).body;
+    for (let generation = 0; generation < 4; generation++) {
+      const oldExpiry = view.expires;
+      clock = oldExpiry;
+      view = (await f.request('/api/create', {token: tokens[0], count: 2})).body;
+      assert.equal(view.expires, oldExpiry + TTL);
+      assert.equal(view.version, 0);
+      const retries = await Promise.all(Array.from({length: 3}, () =>
+        f.request('/api/create', {token: tokens[0], count: 4})));
+      for (const retry of retries) {
+        assert.equal(retry.status, 200);
+        assert.deepEqual(retry.body, view, 'Same-clock retries reuse, never recreate, the live incarnation');
+      }
+    }
+    f.db.close();
+  });
+
+  await test('a delayed old join cannot overwrite a recreated room with the same code and version', async () => {
+    const f = fixture();
+    const first = (await f.request('/api/create', {token: tokens[0], count: 2})).body;
+    let replacement;
+    f.interceptWrite(async () => {
+      clock = first.expires;
+      replacement = (await f.request('/api/create', {token: tokens[0], count: 4})).body;
+    });
+    const delayed = await f.request('/api/join/' + first.code, {token: tokens[1]});
+    assert.equal(delayed.status, 404, 'Expired generation must not join its replacement');
+    assert.equal(delayed.body.errorCode, 'room_unavailable');
+    const actual = await f.request('/api/state/' + first.code, {token: tokens[0]});
+    assert.deepEqual(actual.body, replacement, 'Fresh four-seat table must remain unchanged');
+    f.db.close();
+  });
+
+  await test('a delayed old action cannot resurrect its board in a recreated same-version room', async () => {
+    const f = fixture(), first = await f.room();
+    const state = createGame(); state.turn = 1; state.tokens[2][0] = 12;
+    f.seed(first.code, state);
+    let replacement;
+    nextDie = 6;
+    f.interceptWrite(async () => {
+      clock = first.expires;
+      await f.request('/api/create', {token: tokens[0], count: 2});
+      replacement = (await f.request('/api/join/' + first.code, {token: tokens[2]})).body;
+    });
+    const delayed = await f.request('/api/action/' + first.code, {
+      token: tokens[1], version: first.version, actionId: actionId(), kind: 'roll',
+    });
+    assert.equal(delayed.status, 404, 'Expired generation must not mutate its replacement');
+    assert.equal(delayed.body.errorCode, 'room_unavailable');
+    const actual = await f.request('/api/state/' + first.code, {token: tokens[2]});
+    assert.deepEqual(actual.body, replacement, 'New board and replacement guest must remain unchanged');
+    f.db.close();
+  });
+
+  await test('a rejected old action does not return a replacement board to its former guest', async () => {
+    const f = fixture(), first = await f.room();
+    const state = createGame(); state.turn = 1; f.seed(first.code, state);
+    f.interceptWrite(async () => {
+      clock = first.expires;
+      await f.request('/api/create', {token: tokens[0], count: 4});
+    });
+    const delayed = await f.request('/api/action/' + first.code, {
+      token: tokens[1], version: first.version, actionId: actionId(), kind: 'roll',
+    });
+    assert.equal(delayed.status, 404);
+    assert.equal(delayed.body.errorCode, 'room_unavailable');
+    assert.equal(delayed.body.state, undefined, 'Old seat must not receive a new incarnation');
+    f.db.close();
+  });
+
+  for (const kind of ['join', 'action']) {
+    await test(`a delayed ${kind} handles a deleted old room as terminal, not a retryable failure`, async () => {
+      const f = fixture();
+      const first = kind === 'join'
+        ? (await f.request('/api/create', {token: tokens[0], count: 2})).body : await f.room();
+      f.interceptWrite(async () => {
+        clock = first.expires;
+        f.db.prepare('DELETE FROM rooms WHERE code = ?').run(first.code);
+      });
+      const delayed = await f.request('/api/' + kind + '/' + first.code, {
+        token: kind === 'join' ? tokens[1] : tokens[0],
+        version: first.version, actionId: actionId(), kind: 'roll',
+      });
+      assert.equal(delayed.status, 404);
+      assert.equal(delayed.body.errorCode, 'room_unavailable');
+      f.db.close();
+    });
+  }
+
+  await test('same-generation action contention still returns the authoritative board and safe retry', async () => {
+    const f = fixture(), first = await f.room(); nextDie = 6;
+    const winnerInput = {token: tokens[0], version: first.version, actionId: actionId(), kind: 'roll'};
+    let winner;
+    f.interceptWrite(async () => { winner = await f.request('/api/action/' + first.code, winnerInput); });
+    const loser = await f.request('/api/action/' + first.code, {
+      token: tokens[0], version: first.version, actionId: actionId(), kind: 'roll',
+    });
+    assert.equal(winner.status, 200);
+    assert.equal(loser.status, 409);
+    assert.deepEqual(loser.body.state, winner.body.state);
+    assert.equal(loser.body.version, first.version + 1);
+    const retry = await f.request('/api/action/' + first.code, winnerInput);
+    assert.equal(retry.status, 200);
+    assert.deepEqual(retry.body, winner.body);
     f.db.close();
   });
 
